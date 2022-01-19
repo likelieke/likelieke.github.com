@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>(Unofficial) Daylio dashboard</title>
+    <link rel="icon" type="image/png" href="img/favicon.png">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background-color: #202330;
+            color: white;
+        }
+
+        ul {
+            padding: 1rem;
+        }
+
+        .list-group-item {
+            position: relative;
+            display: block;
+            padding: .75rem 1.25rem;
+            margin-bottom: -1px;
+            background-color: #282b36;
+            border: 1px solid rgba(0, 0, 0, .125);
+            max-width: 250px;
+        }
+
+        .include-exclude-button {
+            float: right;
+        }
+
+        .button {
+            background-color: #282b36;
+            border: none;
+            color: white;
+            padding: 15px 32px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+        }
+    </style>
+    <script src="./js/chart.min.js"></script>
+    <script src="./js/papaparse.min.js"></script>
+
+    <script src="./js/moment_2_27_0.js"></script>
+    <script src="./js/chartjs-adapter-moment_0_1_1.js"></script>
+    <script src="./js/Sortable.min.js"></script>
+    <script src="./js/chartjs-plugin-zoom.min.js"></script>
+</head>
+
+<body>
+    <p>This dashboard is in no way affiliated with daylio and this is purely a hobby project.</p>
+    <span>Please input your daylio csv export here: </span><input type="file" id="input" class="button"></input><br>
+    <button onclick="generateRandomData()">Generate random data</button>
+    <div id="graphingDiv" style="visibility: hidden;">
+        <div id="graphs">
+            <h1>Graphs</h1>
+            <span>Synchronize zoom between graphs</span><input type="checkbox" id="zoomCheckbox" checked>
+            <canvas id="myChart" width="400" height="100"></canvas>
+            <canvas id="customActivitiesChart" width="400" height="100"></canvas>
+            <span id="activitiesChartPlaceholder">Add activities to show this graph.</span>
+            <br />
+        </div>
+        <div id="moodConfig">
+            <h1>Mood list</h1>
+            <p>Change the order in this list by dragging them in the right order and the graph will automatically
+                update. Unfortunately the csv does not give a order of the moods therefore this needs to be set
+                manually. Please check if the current order is correct.</p>
+            <ul id="moodList">
+            </ul>
+            <button class="button" onclick="updateMoods()">Redraw graph</button>
+
+        </div>
+        <div id="activityConfig">
+            <H1> Configure activity chart</H1>
+            <p>Add the activities to show to the include list by using the &plus; button. Remove them by using the
+                &minus; button. Change the ordering of the activities in the graph by dragging and dropping the items in
+                the correct order.</p>
+            <div>
+                <div style="width:40%; float: left;">
+                    <h2>Exclude</h2>
+                    <ul id="activitiesToExcludeList"></ul>
+                </div>
+
+                <div style="width:40%; float: right;">
+                    <h2>Include</h2>
+                    <div>
+                        <input type="radio" id="graphLine" name="graphType" value="line"
+                            onclick="generateGraphFromActivities()" checked>
+                        <label for="graphLine">Line</label><br>
+                        <input type="radio" id="graphScatter" name="graphType" value="scatter"
+                            onclick="generateGraphFromActivities()">
+                        <label for="graphScatter">Scatter</label><br>
+                        <input type="radio" id="graphBar" name="graphType" value="bar"
+                            onclick="generateGraphFromActivities()">
+                        <label for="graphBar">Bar</label><br>
+                    </div>
+                    <div>
+                        <ul id="activitiesToInludeList"></ul>
+                    </div>
+                    <button class="button" onclick="generateGraphFromActivities()">Generate Graph</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+
+    <script>
+        var entries = [];
+        var moodStates = ["awful", "bad", "meh", "good", "rad"];
+        var customActivities = [];
+
+
+        const inputElement = document.getElementById("input");
+        const zoomCheckbox = document.getElementById("zoomCheckbox");
+        const graphPlaceHolder = document.getElementById("activitiesChartPlaceholder");
+        var moodlist = document.getElementById("moodList");
+        var activitiesList = document.getElementById("activitiesToExcludeList");
+        
+        var moodChart;
+        var customChart;
+
+        var leftEnd;
+        var rightEnd;
+
+        inputElement.addEventListener("change", handleFiles, false);
+
+        function reportWindowSize() {
+            console.log("changing window size");
+            if (moodChart != null) {
+                moodChart.update();
+            }
+            if (customChart != null) {
+                customChart.update();
+            }
+        }
+
+        // window.onresize = reportWindowSize;
+        window.addEventListener('resize', reportWindowSize);
+
+        function handleFiles() {
+            const fileList = this.files;
+            var csvFile = fileList[0];
+
+            const reader = new FileReader();
+            reader.onload = event => {
+                console.log('loaded file');
+                ParseCsv(event.target.result);
+            }
+            reader.onerror = error => reject(error);
+            reader.readAsText(csvFile);
+
+        }
+
+        class Entry {
+            fullDate;
+            date;
+            weekday;
+            time;
+            mood;
+            activities;
+            noteTitle;
+            note;
+            constructor(fullDate, date, weekday, time, mood, activities, noteTitle, note) {
+                this.fullDate = fullDate;
+                this.date = date;
+                this.weekday = weekday;
+                this.time = time;
+                this.mood = mood;
+                if (activities == "" || activities == null) {
+                    this.activities = [];
+                } else {
+                    var splittedActivities = activities.split('|');
+                    for (let i = 0; i < splittedActivities.length; i++) {
+                        const element = splittedActivities[i];
+                        splittedActivities[i] = element.trim();
+                    }
+                    this.activities = splittedActivities;
+                }
+                this.noteTitle = noteTitle;
+                this.note = note;
+            }
+        }
+        var plugin = {
+            beforeRender: (x, options) => {
+                const c = x.chart;
+                const dataset = x.data.datasets[0];
+                const yScale = x.scales['y'];
+                const yPos = yScale.getPixelForValue(0);
+
+                const gradientFill = x.ctx.createLinearGradient(0, 0, 0, x.height);
+                gradientFill.addColorStop(0, 'rgb(0,255,0)');
+                gradientFill.addColorStop(1, 'rgb(255,0,0)');
+
+                dataset.borderColor = gradientFill;
+            },
+        };
+        var zoomOptions = {
+            zoom: {
+                zoom: {
+                    pan: {
+                        enabled: true
+                    },
+                    wheel: {
+                        enabled: true,
+                    },
+                    pinch: {
+                        enabled: true
+                    },
+                    drag: {
+                        enabled: true,
+                    },
+                    mode: 'x',
+                    onZoomComplete: function (chart) {
+                        if (!zoomCheckbox.checked) {
+                            return;
+                        }
+                        if (customChart != null && customChart != chart) {
+                            customChart.options.scales.x.min = chart.chart.options.scales.x.min;
+                            customChart.options.scales.x.max = chart.chart.options.scales.x.max;
+                            customChart.update();
+                        }
+                        if (moodChart != null && moodChart != chart) {
+                            moodChart.options.scales.x.min = chart.chart.options.scales.x.min;
+                            moodChart.options.scales.x.max = chart.chart.options.scales.x.max;
+                            moodChart.update();
+                        }
+                    }
+                }
+            }
+        };
+        function generateRandomData() {
+            entries = [];
+            var moods = ["awefull", "bad", "meh", "good", "rad"];
+            var activities = ["hiking", "kayaking", "shopping","dishes", "walking"]
+            var now = new Date();
+            var daysOfYear = [];
+            const lastYear = new Date();
+            lastYear.setFullYear(lastYear.getFullYear() - 1);
+            for (var d = lastYear; d <= now; d.setDate(d.getDate() + 1)) {
+                var fullDate = d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();
+                var date = fullDate;
+                var weekday = "empty data";
+                var time = "09:00";
+                var mood = moods[Math.floor(Math.random() * moods.length)];
+                var activity = activities[Math.floor(Math.random() * activities.length)];
+                var noteTitle = "";
+                var note = "";
+
+                var entry = new Entry(fullDate, date, weekday, time, mood, activity, noteTitle, note);
+                entries.push(entry);
+            }
+            entriesChanged();
+        }
+
+        function ParseCsv(text) {
+            clear();
+            var parsed = Papa.parse(text);
+
+            for (let i = parsed.data.length - 1; i > 1; i--) {
+                const element = parsed.data[i];
+
+                var fullDate = element[0];
+                var date = element[1];
+                var weekday = element[2];
+                var time = element[3];
+                var mood = element[4];
+                var activities = element[5];
+                var noteTitle = element[6];
+                var note = element[7];
+
+                var entry = new Entry(fullDate, date, weekday, time, mood, activities, noteTitle, note);
+                entries.push(entry);
+            }
+            entriesChanged();
+            
+        }
+        function clear(){
+            var entries = [];
+            var moodStates = [];
+            var customActivities = [];
+            moodlist.innerHTML = '';
+            activitiesList.innerHTML = '';
+        }
+        function entriesChanged() {
+            document.getElementById("graphingDiv").style.visibility = "visible";
+            moodlist.innerHTML = '';
+            activitiesList.innerHTML = '';
+            setListOfMoods();
+            generateChartJsGraph();
+            updateMoodList();
+            updateActivitiesList()
+        }
+
+        function updateMoodList() {            
+            moodlist.innerHTML = '';
+            var map = {};
+            entries.forEach(element => {
+                map[element.mood] = true;
+            });
+            for (var key in map) {
+                moodlist.innerHTML += "<li class='list-group-item'>" + key + "</li>";
+            }
+            var sortable = Sortable.create(moodlist, { onChange: function (evt) { updateMoods(); } });
+        }
+
+        function updateActivitiesList() {
+            
+            activitiesList.innerHTML = '';
+            var map = getListOfActivities();
+            console.log(map);
+            var list = [];
+            for (const [key, value] of Object.entries(map)) {
+                list.push(key);
+            }
+            list.sort();
+            for (var activity in list) {
+                activitiesList.innerHTML += "<li class='list-group-item'><span id='content'>" + list[activity] + "</span><button onclick='moveToIncludeList(this)' class='include-exclude-button'>+</button></li>";
+            }
+            Sortable.create(activitiesList);
+        }
+
+        function moveToIncludeList(li) {
+            li.childNodes[0].remove();
+            var includeList = document.getElementById("activitiesToInludeList");
+            includeList.innerHTML += "<li class='list-group-item'><span id='content'>" + li.parentElement.innerText + "</span><button onclick='moveToExcludeList(this)' class='include-exclude-button'>-</button></li>";
+            li.parentElement.remove();
+            Sortable.create(includeList, { onChange: function (evt) { generateGraphFromActivities(); } });
+            generateGraphFromActivities();
+        }
+
+        function moveToExcludeList(li) {
+            li.childNodes[0].remove();
+            var excludeList = document.getElementById("activitiesToExcludeList");
+            excludeList.innerHTML += "<li class='list-group-item'><span id='content'>" + li.parentElement.innerText + "</span><button onclick='moveToIncludeList(this)' class='include-exclude-button'>+</button></li>";
+            li.parentElement.remove();
+            Sortable.create(excludeList);
+            generateGraphFromActivities();
+        }
+        function setListOfMoods() {
+            var map = {};
+            for (let i = 0; i < entries.length; i++) {
+                const entry = entries[i];
+                if (map.hasOwnProperty(entry.mood)) {
+                    map[entry.mood] += 1;
+                } else {
+                    map[entry.mood] = 1;
+                }
+            }
+            moodStates = [];
+            for (var key in map) {
+                moodStates.push(key);
+            }
+        }
+
+        function getListOfActivities() {
+            var map = {};
+            for (let i = 0; i < entries.length; i++) {
+                const entry = entries[i];
+                for (let j = 0; j < entry.activities.length; j++) {
+                    const activity = entry.activities[j];
+                    if (map.hasOwnProperty(activity)) {
+                        map[activity] += 1;
+                    } else {
+                        map[activity] = 1;
+                    }
+                }
+            }
+            return map;
+        }
+
+        function generateChartJsGraph() {
+
+            const ctx = document.getElementById('myChart').getContext('2d');
+            var data = EntriesToDataSet();
+
+            if (moodChart != null) {
+                moodChart.destroy();
+            }
+            moodChart = new Chart(ctx, {
+                plugins: [plugin],
+                type: 'line',
+
+                data:
+                {
+                    datasets: [
+                        data
+                    ]
+                },
+                options: {
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'month'
+                            }
+                        },
+                        y: {
+                            display: true,
+                            scaleLabel: {
+                                display: true,
+                                labelString: 'Value'
+                            },
+                            ticks: {
+                                // min: 0,
+                                // max: 9,
+                                stepSize: 1,
+                                callback: function (label, index, labels) {
+                                    if (moodStates.length > label && label >= 0) {
+                                        return capitalizeFirstLetter(moodStates[label]);
+                                    }
+                                    return label;
+                                }
+                            },
+                            gridLines: {
+                                display: false
+                            }
+                        }
+                    },
+                    plugins: zoomOptions
+                }
+            });
+            moodChart.update();
+        }
+
+
+
+
+        function updateMoods() {
+            var li = document.getElementById("moodList");
+            var items = li.getElementsByTagName("li");
+            var arrayNodes = [].slice.call(items, 0);
+            arrayNodes.reverse();
+            moodStates = [];
+            for (let i = 0; i < arrayNodes.length; i++) {
+                moodStates.push(arrayNodes[i].innerHTML);
+
+            }
+            // myChart.update();
+            generateChartJsGraph();
+        }
+
+        // generateChartJsGraph();
+
+        function capitalizeFirstLetter(string) {
+            if (string == null || string.length == 0) {
+                return string;
+            }
+            return string.charAt(0).toUpperCase() + string.slice(1);
+        }
+        function EntriesToDataSet() {
+            var dataset = {};
+            dataset.label = "Mood";
+            dataset.pointRadius = 1;
+            dataset.data = [];
+            dataset.borderColor = [
+                // 'rgba(255, 0, 0, 1)'
+            ];
+            dataset.color = [];
+            dataset.backgroundColor = []
+            for (let i = 0; i < entries.length; i++) {
+                const element = entries[i];
+                var index = -1;
+                for (let j = 0; j < moodStates.length; j++) {
+                    const state = moodStates[j];
+                    if (element.mood.includes(state)) {
+                        index = j;
+                        break;
+                    }
+                }
+                if (index != -1) {
+
+                    dataset.data.push(
+                        {
+                            x: element.fullDate,
+                            y: index
+                        }
+                    );
+                    if (index < 2) {
+                        dataset.backgroundColor.push('rgba(255,0,0,1)');
+                        // dataset.borderColor.push('rgba(255,0,0,1)');
+                    }
+                    if (index > 2) {
+                        dataset.backgroundColor.push('rgba(0,255,0,1)');
+                        // dataset.borderColor.push('rgba(0,255,0,1)');
+                    }
+                    if (index == 2) {
+                        dataset.backgroundColor.push('rgba(0,0,255,1)');
+                        // dataset.borderColor.push('rgba(0,0,255,1)');
+                    }
+
+                }
+            }
+
+            dataset.borderWidth = 1;
+            return dataset;
+        }
+
+        function generateGraphFromActivities() {
+            graphPlaceHolder.style.visibility = 'hidden';
+            var radioValue = document.querySelector('input[name="graphType"]:checked').value;
+
+            const ctx = document.getElementById("customActivitiesChart").getContext('2d');
+
+            var data = activitiesToDataSet();
+            if (data == null) { return; }
+
+            if (customChart != null) {
+                customChart.destroy();
+            }
+            customChart = new Chart(ctx, {
+                plugins: [plugin],
+                type: radioValue,
+                data:
+                {
+                    datasets: [
+                        data
+                    ]
+                },
+                options: {
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'month'
+                            },
+                            gridLines: {
+                                display: true,
+                                color: "#FFFFFF"
+                            },
+                        },
+                        y: {
+                            display: true,
+                            scaleLabel: {
+                                display: true,
+                                labelString: 'Value'
+                            },
+                            gridLines: {
+                                display: true,
+                                color: "#FFFFFF"
+                            },
+                            ticks: {
+                                // min: 0,
+                                // max: 9,
+                                stepSize: 1,
+                                callback: function (label, index, labels) {
+                                    if (customActivities.length > label && label >= 0) {
+                                        return capitalizeFirstLetter(customActivities[label]);
+                                    }
+                                    return label;
+                                }
+                            },
+                            // ticks: {
+                            //     min: 0,
+                            //     max: 9,
+                            //     stepSize: 1
+                            // },
+                            // gridLines: {
+                            //     display: false
+                            // }
+                        }
+                    },
+                    plugins: zoomOptions
+                }
+            });
+            customChart.update();
+        }
+        function activitiesToDataSet() {
+
+            var lis = document.getElementById('activitiesToInludeList').getElementsByTagName('li');
+            customActivities = [];
+            for (let i = 0; i < lis.length; i++) {
+                const element = lis[i];
+                var activity = element.firstChild.innerHTML;
+                customActivities.push(activity);
+            }
+            if (customActivities.length == 0) {
+                alert("Please add activities to graph with the + button at the activity");
+                return null;
+            }
+            customActivities.reverse();
+
+            var dataset = {};
+            dataset.label = "Activities";
+            dataset.pointRadius = 1;
+            dataset.data = [];
+            dataset.color = [];
+            dataset.backgroundColor = []
+            for (let i = 0; i < entries.length; i++) {
+                const entry = entries[i];
+                var indexes = [];
+                for (let j = 0; j < customActivities.length; j++) {
+                    const activity = customActivities[j];
+                    if (entry.activities.includes(activity)) {
+                        indexes.push(j);
+                    }
+                }
+
+                if (indexes.length != 0) {
+                    for (let j = 0; j < indexes.length; j++) {
+                        dataset.data.push(
+                            {
+                                x: entry.fullDate,
+                                y: indexes[j]
+                            }
+                        );
+                    }
+
+                } else {
+                    dataset.data.push(
+                        {
+                            x: entry.fullDate
+                        }
+                    );
+                }
+            }
+
+            dataset.borderWidth = 1;
+            return dataset;
+        }
+
+
+    </script>
+</body>
+
+</html>

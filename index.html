@@ -41,6 +41,22 @@
             display: inline-block;
             font-size: 16px;
         }
+
+        a:link {
+            color: white;
+        }
+
+        a:visited {
+            color: grey;
+        }
+
+        a:hover {
+            color: darkgrey;
+        }
+
+        a:active {  
+            color: whitesmoke;
+        }
     </style>
     <script src="./js/chart.min.js"></script>
     <script src="./js/papaparse.min.js"></script>
@@ -53,6 +69,7 @@
 
 <body>
     <p>This dashboard is in no way affiliated with daylio and this is purely a hobby project.</p>
+    <p><a href="https://likelieke.github.io">Github</a></p>
     <span>Please input your daylio csv export here: </span><input type="file" id="input" class="button"></input><br>
     <button onclick="generateRandomData()">Generate random data</button>
     <div id="graphingDiv" style="visibility: hidden;">
@@ -120,7 +137,7 @@
         const graphPlaceHolder = document.getElementById("activitiesChartPlaceholder");
         var moodlist = document.getElementById("moodList");
         var activitiesList = document.getElementById("activitiesToExcludeList");
-        
+
         var moodChart;
         var customChart;
 
@@ -223,19 +240,23 @@
                         if (!zoomCheckbox.checked) {
                             return;
                         }
-                        
+
                         if (customChart != null && customChart != chart) {
                             customChart.options.scales.x.min = chart.chart.options.scales.x.min;
                             customChart.options.scales.x.max = chart.chart.options.scales.x.max;
-                            
+                            customChart.options.scales.y.min = 0;
+                            customChart.options.scales.y.max = activitiesList.length;
+
                             customChart.update();
                         }
                         if (moodChart != null && moodChart != chart) {
                             moodChart.options.scales.x.min = chart.chart.options.scales.x.min;
                             moodChart.options.scales.x.max = chart.chart.options.scales.x.max;
+                            moodChart.options.scales.y.min = 0;
+                            moodChart.options.scales.y.max = moodlist.length;
                             moodChart.update();
                         }
-                        
+
                     }
                 }
             }
@@ -243,13 +264,13 @@
         function generateRandomData() {
             entries = [];
             var moods = ["awefull", "bad", "meh", "good", "rad", "testmood1", "testmood2"];
-            var activities = ["hiking", "kayaking", "shopping","dishes", "walking", "activities", "actives" ,"1", "2","3","4","5","6", "7","8","9","10"]
+            var activities = ["hiking", "kayaking", "shopping", "dishes", "walking", "activities", "actives", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]
             var now = new Date();
             var daysOfYear = [];
             const lastYear = new Date();
             lastYear.setFullYear(lastYear.getFullYear() - 1);
             for (var d = lastYear; d <= now; d.setDate(d.getDate() + 1)) {
-                var fullDate = d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();
+                var fullDate = d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
                 var date = fullDate;
                 var weekday = "empty data";
                 var time = "09:00";
@@ -284,9 +305,9 @@
                 entries.push(entry);
             }
             entriesChanged();
-            
+
         }
-        function clear(){
+        function clear() {
             var entries = [];
             var moodStates = [];
             var customActivities = [];
@@ -298,12 +319,12 @@
             moodlist.innerHTML = '';
             activitiesList.innerHTML = '';
             setListOfMoods();
-            generateChartJsGraph();
+            generateMoodChart();
             updateMoodList();
             updateActivitiesList()
         }
 
-        function updateMoodList() {            
+        function updateMoodList() {
             moodlist.innerHTML = '';
             var map = {};
             entries.forEach(element => {
@@ -316,7 +337,7 @@
         }
 
         function updateActivitiesList() {
-            
+
             activitiesList.innerHTML = '';
             var map = getListOfActivities();
             console.log(map);
@@ -380,7 +401,7 @@
             return map;
         }
 
-        function generateChartJsGraph() {
+        function generateMoodChart() {
 
             const ctx = document.getElementById('myChart').getContext('2d');
             var data = EntriesToDataSet();
@@ -412,20 +433,22 @@
                                 display: true,
                                 labelString: 'Value'
                             },
+                            min: 0,
+                            max: moodlist.length,
                             ticks: {
-                                min: 0,
-                                max: 20,
+                                // min: 0,
+                                // max: 20,
                                 stepSize: 1,
                                 callback: function (label, index, labels) {
                                     if (moodStates.length > label && label >= 0) {
                                         return capitalizeFirstLetter(moodStates[label]);
                                     }
                                     return label;
-                                },                                
-                                maxTicksLimit :20,
-                                suggestedMin:0,
-                                suggestedMax:moodlist.length,
-                                count:moodlist.length,
+                                },
+                                maxTicksLimit: 20,
+                                suggestedMin: 0,
+                                suggestedMax: moodlist.length,
+                                count: moodlist.length,
                                 beginAtZero: true
                             },
                             gridLines: {
@@ -453,10 +476,10 @@
 
             }
             // myChart.update();
-            generateChartJsGraph();
+            generateMoodChart();
         }
 
-        // generateChartJsGraph();
+        // generateMoodChart();
 
         function capitalizeFirstLetter(string) {
             if (string == null || string.length == 0) {
@@ -559,16 +582,16 @@
                                 min: 0,
                                 max: 20,
                                 stepSize: 1,
-                                callback: function (label, index, labels) {                                    
+                                callback: function (label, index, labels) {
                                     if (customActivities.length > label && label >= 0) {
                                         return capitalizeFirstLetter(customActivities[label]);
                                     }
                                     return label;
                                 },
-                                maxTicksLimit :20,                                
-                                suggestedMin:0,
-                                suggestedMax:activitiesList.length                                ,
-                                count:activitiesList.length,
+                                maxTicksLimit: 20,
+                                suggestedMin: 0,
+                                suggestedMax: activitiesList.length,
+                                count: activitiesList.length,
                                 beginAtZero: true
                             },
                         }

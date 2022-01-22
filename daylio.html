@@ -203,25 +203,31 @@
             zoom: {
                 zoom: {
                     pan: {
-                        enabled: true
+                        enabled: true,
+                        mode: 'x'
                     },
                     wheel: {
                         enabled: true,
+                        mode: 'x'
                     },
                     pinch: {
-                        enabled: true
+                        enabled: true,
+                        mode: 'x'
                     },
                     drag: {
                         enabled: true,
+                        mode: 'x'
                     },
                     mode: 'x',
                     onZoomComplete: function (chart) {
                         if (!zoomCheckbox.checked) {
                             return;
                         }
+                        
                         if (customChart != null && customChart != chart) {
                             customChart.options.scales.x.min = chart.chart.options.scales.x.min;
                             customChart.options.scales.x.max = chart.chart.options.scales.x.max;
+                            
                             customChart.update();
                         }
                         if (moodChart != null && moodChart != chart) {
@@ -229,14 +235,15 @@
                             moodChart.options.scales.x.max = chart.chart.options.scales.x.max;
                             moodChart.update();
                         }
+                        
                     }
                 }
             }
         };
         function generateRandomData() {
             entries = [];
-            var moods = ["awefull", "bad", "meh", "good", "rad"];
-            var activities = ["hiking", "kayaking", "shopping","dishes", "walking"]
+            var moods = ["awefull", "bad", "meh", "good", "rad", "testmood1", "testmood2"];
+            var activities = ["hiking", "kayaking", "shopping","dishes", "walking", "activities", "actives" ,"1", "2","3","4","5","6", "7","8","9","10"]
             var now = new Date();
             var daysOfYear = [];
             const lastYear = new Date();
@@ -406,15 +413,20 @@
                                 labelString: 'Value'
                             },
                             ticks: {
-                                // min: 0,
-                                // max: 9,
+                                min: 0,
+                                max: 20,
                                 stepSize: 1,
                                 callback: function (label, index, labels) {
                                     if (moodStates.length > label && label >= 0) {
                                         return capitalizeFirstLetter(moodStates[label]);
                                     }
                                     return label;
-                                }
+                                },                                
+                                maxTicksLimit :20,
+                                suggestedMin:0,
+                                suggestedMax:moodlist.length,
+                                count:moodlist.length,
+                                beginAtZero: true
                             },
                             gridLines: {
                                 display: false
@@ -544,24 +556,21 @@
                                 color: "#FFFFFF"
                             },
                             ticks: {
-                                // min: 0,
-                                // max: 9,
+                                min: 0,
+                                max: 20,
                                 stepSize: 1,
-                                callback: function (label, index, labels) {
+                                callback: function (label, index, labels) {                                    
                                     if (customActivities.length > label && label >= 0) {
                                         return capitalizeFirstLetter(customActivities[label]);
                                     }
                                     return label;
-                                }
+                                },
+                                maxTicksLimit :20,                                
+                                suggestedMin:0,
+                                suggestedMax:activitiesList.length                                ,
+                                count:activitiesList.length,
+                                beginAtZero: true
                             },
-                            // ticks: {
-                            //     min: 0,
-                            //     max: 9,
-                            //     stepSize: 1
-                            // },
-                            // gridLines: {
-                            //     display: false
-                            // }
                         }
                     },
                     plugins: zoomOptions
